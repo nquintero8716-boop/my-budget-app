@@ -3,237 +3,205 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Universal Budget Tracker</title>
+    <title>Budget Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-
-        const firebaseConfig = JSON.parse(__firebase_config);
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'universal-tracker-v1';
-
-        let cloudUnsubscribe = null;
-        let isSaving = false;
-
-        // Rule 3: Auth first with reliable fallback
-        async function startAuth() {
-            try {
-                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-                    await signInWithCustomToken(auth, __initial_auth_token);
-                } else {
-                    await signInAnonymously(auth);
-                }
-            } catch (e) {
-                console.error("Auth failed, retrying...", e);
-                setTimeout(startAuth, 2000);
-            }
-        }
-        
-        startAuth();
-
-        onAuthStateChanged(auth, (user) => {
-            if (!user) return;
-
-            // Check URL for shared key (the 'Universal' part)
-            const urlParams = new URLSearchParams(window.location.search);
-            const sharedKey = urlParams.get('sync');
-            if (sharedKey) {
-                localStorage.setItem('universal_sync_key', sharedKey);
-                // Clean URL so it doesn't look messy
-                window.history.replaceState({}, document.title, window.location.pathname);
-            }
-
-            const savedKey = localStorage.getItem('universal_sync_key');
-            if (savedKey) {
-                document.getElementById('sync-key-input').value = savedKey;
-                connectToCloud(savedKey);
-            } else {
-                updateSyncStatus("Enter a key to start", "#8b949e");
-            }
-        });
-
-        window.connectSync = () => {
-            const key = document.getElementById('sync-key-input').value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (key.length < 3) return alert("Key must be at least 3 letters/numbers.");
-            localStorage.setItem('universal_sync_key', key);
-            connectToCloud(key);
-        };
-
-        window.copySyncLink = () => {
-            const key = localStorage.getItem('universal_sync_key');
-            if (!key) return alert("Connect a key first!");
-            const url = window.location.href.split('?')[0] + '?sync=' + key;
-            
-            // Reliable copy
-            const el = document.createElement('textarea');
-            el.value = url;
-            document.body.appendChild(el);
-            el.select();
-            document.execCommand('copy');
-            document.body.removeChild(el);
-            
-            const btn = document.getElementById('share-btn');
-            const originalText = btn.innerHTML;
-            btn.innerHTML = '<i class="fas fa-check mr-1"></i> Link Copied!';
-            setTimeout(() => { btn.innerHTML = originalText; }, 2000);
-        };
-
-        function updateSyncStatus(text, color) {
-            const dot = document.getElementById('sync-dot');
-            const label = document.getElementById('sync-status-text');
-            if (dot) dot.style.background = color;
-            if (label) label.innerText = text;
-        }
-
-        function connectToCloud(key) {
-            if (cloudUnsubscribe) cloudUnsubscribe();
-            updateSyncStatus("Syncing...", "#e3b341");
-
-            const dataDoc = doc(db, 'artifacts', appId, 'public', 'data', 'sync_' + key);
-
-            cloudUnsubscribe = onSnapshot(dataDoc, (snapshot) => {
-                if (snapshot.exists() && !isSaving) {
-                    const cloudTasks = snapshot.data().tasks;
-                    window.updateLocalData(cloudTasks);
-                    updateSyncStatus("Universal Live: " + key, "#238636");
-                } else if (!snapshot.exists()) {
-                    updateSyncStatus("Connected: " + key, "#58a6ff");
-                }
-                document.getElementById('share-btn').classList.remove('hidden');
-            }, (err) => {
-                console.error(err);
-                updateSyncStatus("Connection Lost", "#f85149");
-                setTimeout(() => connectToCloud(key), 5000); // Auto-retry
-            });
-
-            window.saveGlobal = async (tasks) => {
-                if (!auth.currentUser || isSaving) return;
-                isSaving = true;
-                try {
-                    await setDoc(dataDoc, { 
-                        tasks: tasks, 
-                        lastUpdated: Date.now(),
-                        device: navigator.userAgent
-                    });
-                } catch (e) { 
-                    console.error("Cloud save failed", e); 
-                } finally {
-                    setTimeout(() => { isSaving = false; }, 500); // Prevent loop
-                }
-            };
-        }
-    </script>
-
     <style>
-        body { background-color: #0b0e14; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
-        .glass-card { background: #161b22; border: 1px solid #30363d; }
-        input, textarea, select { background-color: #0d1117 !important; border: 1px solid #30363d !important; color: white !important; border-radius: 12px !important; outline: none; }
-        input:focus { border-color: #58a6ff !important; box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.1); }
-        .status-badge { padding: 8px 14px; border-radius: 8px; font-size: 0.75rem; font-weight: 900; text-transform: uppercase; cursor: pointer; display: inline-block; transition: all 0.2s; }
-        .status-paid { background: #238636; box-shadow: 0 4px 12px rgba(35, 134, 54, 0.2); }
-        .status-pending { background: #9e6a03; box-shadow: 0 4px 12px rgba(158, 106, 3, 0.2); }
-        .status-notdone { background: #484f58; }
-        .dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; }
-        .amount-text { font-family: 'SF Mono', 'Fira Code', monospace; }
-        /* Mobile optimization */
-        @media (max-width: 640px) {
-            .mobile-stack { flex-direction: column; align-items: flex-start; }
-            .mobile-full { width: 100%; }
+        :root {
+            --neon-blue: #00d2ff;
+            --neon-green: #39ff14;
+            --neon-gold: #ffcc00;
+            --bg-dark: #05070a;
+            --card-bg: #0f1218;
         }
+
+        body { 
+            background-color: var(--bg-dark); 
+            color: #e2e8f0; 
+            font-family: 'Inter', -apple-system, sans-serif; 
+            -webkit-tap-highlight-color: transparent;
+            line-height: 1.5;
+        }
+
+        .glass { 
+            background: var(--card-bg); 
+            border: 1px solid #1e293b; 
+            border-radius: 20px;
+            box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
+        }
+
+        input, select, textarea { 
+            background: #07090d !important; 
+            border: 1px solid #1e293b !important; 
+            color: white !important; 
+            border-radius: 12px !important; 
+            outline: none !important;
+            transition: all 0.2s ease;
+        }
+
+        input:focus { border-color: var(--neon-blue) !important; box-shadow: 0 0 10px rgba(0, 210, 255, 0.2); }
+
+        /* Neon Glow Status Buttons */
+        .status-btn { 
+            padding: 8px 14px; 
+            border-radius: 10px; 
+            font-size: 10px; 
+            font-weight: 800; 
+            text-transform: uppercase; 
+            cursor: pointer; 
+            transition: all 0.3s ease;
+            border: 1px solid transparent;
+            letter-spacing: 0.05em;
+        }
+
+        .status-paid { 
+            background: rgba(57, 255, 20, 0.1); 
+            color: var(--neon-green);
+            border-color: rgba(57, 255, 20, 0.3);
+            text-shadow: 0 0 8px rgba(57, 255, 20, 0.5);
+            box-shadow: 0 0 15px rgba(57, 255, 20, 0.1);
+        }
+        .status-paid:hover { background: rgba(57, 255, 20, 0.2); box-shadow: 0 0 20px rgba(57, 255, 20, 0.3); }
+
+        .status-pending { 
+            background: rgba(255, 204, 0, 0.1); 
+            color: var(--neon-gold);
+            border-color: rgba(255, 204, 0, 0.3);
+            text-shadow: 0 0 8px rgba(255, 204, 0, 0.5);
+            box-shadow: 0 0 15px rgba(255, 204, 0, 0.1);
+        }
+        .status-pending:hover { background: rgba(255, 204, 0, 0.2); box-shadow: 0 0 20px rgba(255, 204, 0, 0.3); }
+
+        .status-notdone { 
+            background: rgba(148, 163, 184, 0.1); 
+            color: #94a3b8;
+            border-color: rgba(148, 163, 184, 0.2);
+        }
+
+        /* Neon Glow Primary Button */
+        .btn-primary {
+            background: linear-gradient(135deg, #00d2ff 0%, #3a7bd5 100%);
+            color: white;
+            box-shadow: 0 4px 15px rgba(0, 210, 255, 0.3);
+            transition: all 0.2s;
+        }
+        .btn-primary:hover {
+            box-shadow: 0 0 20px rgba(0, 210, 255, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .money { font-family: 'JetBrains Mono', monospace; font-weight: 800; letter-spacing: -0.05em; }
+        
+        .transfer-btn { 
+            font-size: 10px; 
+            font-weight: 700; 
+            text-transform: uppercase; 
+            padding: 8px 12px; 
+            border-radius: 10px; 
+            border: 1px solid #1e293b;
+            color: #94a3b8;
+            transition: all 0.2s;
+        }
+        .transfer-btn:hover { border-color: var(--neon-blue); color: var(--neon-blue); }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--bg-dark); }
+        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
     </style>
 </head>
-<body class="min-h-screen p-4 md:p-10">
+<body class="p-4 md:p-8 lg:p-12">
     <div class="max-w-6xl mx-auto">
-        <header class="mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-12">
             <div>
-                <h1 class="text-4xl font-black tracking-tighter">Budget Tracker</h1>
-                <div class="flex flex-wrap items-center gap-4 mt-3">
-                    <div class="flex items-center gap-2 bg-gray-900/50 px-3 py-1.5 rounded-full border border-gray-800">
-                        <div id="sync-dot" class="dot bg-gray-500"></div>
-                        <span id="sync-status-text" class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Checking...</span>
+                <h1 class="text-5xl font-black tracking-tight mb-2 italic">DASH<span class="text-blue-500">BOARD</span></h1>
+                <div class="flex items-center gap-3">
+                    <div class="flex items-center gap-2 px-3 py-1 bg-blue-500/10 rounded-full border border-blue-500/20">
+                        <div class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></div>
+                        <span class="text-[9px] font-black text-blue-400 uppercase tracking-widest">Local Node Active</span>
                     </div>
-                    <button id="share-btn" onclick="copySyncLink()" class="hidden text-[10px] font-black text-blue-400 uppercase border border-blue-400/30 px-3 py-1.5 rounded-full hover:bg-blue-400/10 transition-colors">
-                        <i class="fas fa-share-alt mr-1"></i> Copy Universal Link
-                    </button>
                 </div>
             </div>
-
-            <div class="glass-card p-4 rounded-2xl flex flex-wrap items-center gap-3 w-full md:w-auto">
-                <input type="text" id="sync-key-input" placeholder="Enter Universal Key" class="text-sm p-3 w-full md:w-48 font-bold">
-                <button onclick="connectSync()" class="bg-blue-600 hover:bg-blue-500 w-full md:w-auto px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all">Link Device</button>
+            
+            <div class="flex gap-3 w-full md:w-auto">
+                <button onclick="exportData()" class="transfer-btn flex-1 md:flex-none flex items-center justify-center gap-2">
+                    <i class="fas fa-file-export"></i> Export
+                </button>
+                <label class="transfer-btn flex-1 md:flex-none flex items-center justify-center gap-2 cursor-pointer">
+                    <i class="fas fa-file-import"></i> Import
+                    <input type="file" id="import-file" class="hidden" accept=".json" onchange="importData(event)">
+                </label>
             </div>
         </header>
 
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-            <div class="glass-card p-6 rounded-3xl border-b-4 border-b-green-500 shadow-2xl">
-                <p class="text-gray-500 text-[10px] font-black uppercase tracking-widest">Paid Total</p>
-                <h2 id="summary-paid" class="text-4xl font-black mt-1 text-green-400 amount-text">$0.00</h2>
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+            <div class="glass p-8 relative overflow-hidden group">
+                <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <i class="fas fa-check-circle text-4xl text-green-400"></i>
+                </div>
+                <span class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Received</span>
+                <div id="val-paid" class="text-4xl font-black text-green-400 money mt-3 tracking-tighter">$0.00</div>
             </div>
-            <div class="glass-card p-6 rounded-3xl border-b-4 border-b-orange-500 shadow-2xl">
-                <p class="text-gray-500 text-[10px] font-black uppercase tracking-widest">Pending</p>
-                <h2 id="summary-pending" class="text-4xl font-black mt-1 text-orange-400 amount-text">$0.00</h2>
+            <div class="glass p-8 relative overflow-hidden group">
+                <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                    <i class="fas fa-clock text-4xl text-orange-400"></i>
+                </div>
+                <span class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">In Transit</span>
+                <div id="val-pending" class="text-4xl font-black text-orange-400 money mt-3 tracking-tighter">$0.00</div>
             </div>
-            <div class="glass-card p-6 rounded-3xl border-b-4 border-b-blue-500 shadow-2xl">
-                <p class="text-gray-500 text-[10px] font-black uppercase tracking-widest">Combined</p>
-                <h2 id="summary-total" class="text-4xl font-black mt-1 text-blue-400 amount-text">$0.00</h2>
+            <div class="glass p-8 border-t-2 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.1)]">
+                <span class="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em]">Total Lifetime</span>
+                <div id="val-total" class="text-4xl font-black text-white money mt-3 tracking-tighter">$0.00</div>
             </div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
+            <!-- Sidebar: Add Form -->
             <div class="lg:col-span-4">
-                <div class="glass-card p-8 rounded-3xl sticky top-8 shadow-2xl">
-                    <h3 class="text-xs font-black mb-6 text-gray-500 uppercase tracking-widest">Add Work</h3>
-                    <form id="task-form" class="space-y-6">
-                        <div>
-                            <label class="block text-[10px] font-black text-gray-500 mb-2 uppercase">Date</label>
-                            <input type="date" id="date" required class="w-full p-3 font-bold">
+                <div class="glass p-8 sticky top-8">
+                    <h2 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-8 flex items-center gap-2">
+                        <i class="fas fa-plus-circle text-blue-500"></i> Create Entry
+                    </h2>
+                    <form id="entry-form" class="space-y-6">
+                        <div class="space-y-2">
+                            <label class="text-[9px] font-bold text-gray-500 uppercase ml-1">Timeline</label>
+                            <input type="date" id="f-date" required class="w-full p-4 font-bold text-sm">
                         </div>
-                        <div>
-                            <label class="block text-[10px] font-black text-gray-500 mb-2 uppercase">Client</label>
-                            <select id="client" required class="w-full p-3 font-bold">
+                        <div class="space-y-2">
+                            <label class="text-[9px] font-bold text-gray-500 uppercase ml-1">Entity</label>
+                            <select id="f-client" required class="w-full p-4 font-bold text-sm appearance-none">
                                 <option value="Dad">Dad</option>
                                 <option value="MyStrengthBook">MyStrengthBook</option>
                                 <option value="3rd Party">3rd Party</option>
                             </select>
                         </div>
-                        <div>
-                            <label class="block text-[10px] font-black text-gray-500 mb-2 uppercase">Task</label>
-                            <textarea id="description" rows="3" placeholder="What did you do?" required class="w-full p-3 font-medium"></textarea>
+                        <div class="space-y-2">
+                            <label class="text-[9px] font-bold text-gray-500 uppercase ml-1">Brief</label>
+                            <textarea id="f-desc" placeholder="Describe the task..." required class="w-full p-4 text-sm font-medium h-28 resize-none"></textarea>
                         </div>
-                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-900/40 transition-transform active:scale-95">
-                            Submit Log
-                        </button>
+                        <button type="submit" class="w-full btn-primary py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] active:scale-95">Add to Ledger</button>
                     </form>
                 </div>
             </div>
 
+            <!-- Main Content: History -->
             <div class="lg:col-span-8">
-                <div class="glass-card rounded-3xl overflow-hidden shadow-2xl">
-                    <div class="p-6 border-b border-gray-800 flex justify-between items-center bg-white/5">
-                        <span class="text-xs font-black text-gray-400 uppercase tracking-widest">Recent Activity</span>
-                        <select id="month-filter" class="text-xs bg-transparent border-none p-1 font-black text-blue-400 cursor-pointer"></select>
+                <div class="glass overflow-hidden min-h-[500px]">
+                    <div class="p-6 border-b border-white/5 bg-white/[0.02] flex justify-between items-center">
+                        <span class="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                            <i class="fas fa-list-ul text-blue-500"></i> Records
+                        </span>
+                        <select id="f-month" onchange="renderApp()" class="bg-transparent! border-none! text-xs font-black text-blue-400 cursor-pointer focus:ring-0"></select>
                     </div>
                     <div class="overflow-x-auto">
                         <table class="w-full text-left">
-                            <thead class="text-[10px] text-gray-500 uppercase font-black border-b border-gray-800 bg-gray-900/50">
-                                <tr>
-                                    <th class="p-6">Job Details</th>
-                                    <th class="p-6 text-right">USD Amount</th>
-                                    <th class="p-6 text-center">Status</th>
-                                    <th class="p-6"></th>
-                                </tr>
-                            </thead>
-                            <tbody id="task-list"></tbody>
+                            <tbody id="list"></tbody>
                         </table>
                     </div>
-                    <div id="empty-hint" class="p-20 text-center hidden">
-                        <p class="text-gray-600 font-bold uppercase text-[10px] tracking-[0.3em]">No entries for this month</p>
+                    <div id="empty" class="p-32 text-center hidden">
+                        <i class="fas fa-folder-open text-gray-800 text-5xl mb-4"></i>
+                        <p class="text-gray-600 font-bold uppercase text-[10px] tracking-[0.4em]">Vault Empty</p>
                     </div>
                 </div>
             </div>
@@ -242,121 +210,143 @@
 
     <script>
         let tasks = [];
-        let activeEditId = null;
 
         window.onload = () => {
-            const local = localStorage.getItem('budgetTasks_v3');
-            if(local) {
-                tasks = JSON.parse(local);
-                render();
-            }
-            document.getElementById('date').valueAsDate = new Date();
+            const saved = localStorage.getItem('my_budget_data');
+            if (saved) tasks = JSON.parse(saved);
+            document.getElementById('f-date').valueAsDate = new Date();
+            renderApp();
         };
 
-        window.updateLocalData = (cloudTasks) => {
-            if (!cloudTasks) return;
-            tasks = cloudTasks;
-            localStorage.setItem('budgetTasks_v3', JSON.stringify(tasks));
-            render();
-        };
-
-        document.getElementById('task-form').addEventListener('submit', (e) => {
-            e.preventDefault();
-            const newTask = {
-                id: Date.now(),
-                date: document.getElementById('date').value,
-                client: document.getElementById('client').value,
-                description: document.getElementById('description').value,
-                amount: 0, 
-                status: 'notdone'
-            };
-            tasks.unshift(newTask);
-            save();
-            e.target.reset();
-            document.getElementById('date').valueAsDate = new Date();
-        });
-
-        function handleAmountBlur(id, val) {
-            const num = parseFloat(val);
-            const task = tasks.find(t => t.id === id);
-            if(task && !isNaN(num)) task.amount = num;
-            activeEditId = null;
-            save();
+        function saveData() {
+            localStorage.setItem('my_budget_data', JSON.stringify(tasks));
+            renderApp();
         }
 
-        function toggleStatus(id) {
-            const states = ['notdone', 'pending', 'paid'];
+        window.exportData = () => {
+            const dataStr = JSON.stringify(tasks, null, 2);
+            const blob = new Blob([dataStr], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `budget_ledger_${new Date().toISOString().split('T')[0]}.json`;
+            link.click();
+        };
+
+        window.importData = (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    const imported = JSON.parse(e.target.result);
+                    if (Array.isArray(imported)) {
+                        tasks = imported;
+                        saveData();
+                    }
+                } catch (err) { alert('Invalid file format.'); }
+            };
+            reader.readAsText(file);
+        };
+
+        document.getElementById('entry-form').onsubmit = (e) => {
+            e.preventDefault();
+            tasks.unshift({
+                id: Date.now(),
+                date: document.getElementById('f-date').value,
+                client: document.getElementById('f-client').value,
+                desc: document.getElementById('f-desc').value,
+                amount: 0,
+                status: 'notdone'
+            });
+            saveData();
+            e.target.reset();
+            document.getElementById('f-date').valueAsDate = new Date();
+        };
+
+        window.updateAmount = (id, val) => {
             const task = tasks.find(t => t.id === id);
             if (task) {
-                task.status = states[(states.indexOf(task.status) + 1) % 3];
-                save();
+                task.amount = parseFloat(val) || 0;
+                saveData();
             }
-        }
+        };
 
-        function save() {
-            localStorage.setItem('budgetTasks_v3', JSON.stringify(tasks));
-            if (window.saveGlobal) window.saveGlobal(tasks);
-            render();
-        }
+        window.toggleStatus = (id) => {
+            const task = tasks.find(t => t.id === id);
+            if (task) {
+                const states = ['notdone', 'pending', 'paid'];
+                task.status = states[(states.indexOf(task.status) + 1) % 3];
+                saveData();
+            }
+        };
 
-        function render() {
-            const filter = document.getElementById('month-filter').value || 'all';
+        window.deleteTask = (id) => {
+            tasks = tasks.filter(t => t.id !== id);
+            saveData();
+        };
+
+        function renderApp() {
+            const filter = document.getElementById('f-month').value || 'all';
             const filtered = filter === 'all' ? tasks : tasks.filter(t => t.date.startsWith(filter));
 
-            const paid = filtered.filter(t => t.status === 'paid').reduce((s, t) => s + t.amount, 0);
-            const pending = filtered.filter(t => t.status === 'pending').reduce((s, t) => s + t.amount, 0);
-            const total = filtered.reduce((s, t) => s + t.amount, 0);
+            const paid = filtered.filter(t => t.status === 'paid').reduce((a, b) => a + b.amount, 0);
+            const pending = filtered.filter(t => t.status === 'pending').reduce((a, b) => a + b.amount, 0);
+            const total = filtered.reduce((a, b) => a + b.amount, 0);
 
-            document.getElementById('summary-paid').innerText = `$${paid.toFixed(2)}`;
-            document.getElementById('summary-pending').innerText = `$${pending.toFixed(2)}`;
-            document.getElementById('summary-total').innerText = `$${total.toFixed(2)}`;
+            document.getElementById('val-paid').innerText = `$${paid.toLocaleString(undefined, {minimumFractionDigits:2})}`;
+            document.getElementById('val-pending').innerText = `$${pending.toLocaleString(undefined, {minimumFractionDigits:2})}`;
+            document.getElementById('val-total').innerText = `$${total.toLocaleString(undefined, {minimumFractionDigits:2})}`;
 
-            const list = document.getElementById('task-list');
-            const hint = document.getElementById('empty-hint');
+            const list = document.getElementById('list');
+            const empty = document.getElementById('empty');
             list.innerHTML = '';
             
-            if (filtered.length === 0) hint.classList.remove('hidden');
-            else hint.classList.add('hidden');
+            if (filtered.length === 0) empty.classList.remove('hidden');
+            else empty.classList.add('hidden');
 
             filtered.forEach(t => {
-                const isEditing = activeEditId === t.id;
-                const row = document.createElement('tr');
-                row.className = "border-b border-gray-800/50 hover:bg-white/5 transition-colors";
-                
-                const amountInput = isEditing 
-                    ? `<input type="number" step="0.01" class="w-32 text-right p-2 text-white bg-blue-900 border-blue-400 border-2 rounded-xl text-xl font-bold" value="${t.amount}" onblur="handleAmountBlur(${t.id}, this.value)" onkeydown="if(event.key==='Enter')this.blur()" autofocus>`
-                    : `<div class="cursor-pointer font-black text-2xl text-white amount-text" onclick="activeEditId=${t.id};render()">$${t.amount.toFixed(2)}</div>`;
-
-                row.innerHTML = `
-                    <td class="p-6">
-                        <div class="text-[10px] font-black text-blue-400 uppercase mb-1 tracking-widest">${t.client}</div>
-                        <div class="text-sm font-bold text-gray-200 mb-1 leading-tight">${t.description}</div>
-                        <div class="text-[10px] text-gray-600 font-mono font-bold">${t.date}</div>
+                const tr = document.createElement('tr');
+                tr.className = "border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors group";
+                tr.innerHTML = `
+                    <td class="p-6 align-top">
+                        <div class="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-1 opacity-80">${t.client}</div>
+                        <div class="text-[13px] font-bold text-gray-100 mb-1">${t.desc}</div>
+                        <div class="text-[9px] text-gray-600 font-mono font-bold">${t.date}</div>
                     </td>
-                    <td class="p-6 text-right">${amountInput}</td>
-                    <td class="p-6 text-center">
-                        <span onclick="toggleStatus(${t.id})" class="status-badge status-${t.status}">
-                            ${t.status === 'notdone' ? 'To Do' : t.status}
-                        </span>
+                    <td class="p-6 text-right align-top">
+                        <div class="flex flex-col items-end gap-2">
+                            <div class="relative group/input">
+                                <span class="absolute left-[-15px] top-[4px] text-xs font-black text-gray-700">$</span>
+                                <input type="number" step="0.01" 
+                                    class="w-28 bg-transparent! border-none! text-right font-black money text-2xl text-white focus:text-blue-400" 
+                                    value="${t.amount}" 
+                                    onblur="updateAmount(${t.id}, this.value)">
+                            </div>
+                            <span onclick="toggleStatus(${t.id})" class="status-btn status-${t.status}">
+                                ${t.status === 'notdone' ? 'Pending Action' : t.status}
+                            </span>
+                        </div>
                     </td>
-                    <td class="p-6 text-right">
-                        <button onclick="if(confirm('Delete?')){tasks=tasks.filter(x=>x.id!==${t.id});save()}" class="text-gray-700 hover:text-red-500 p-2 text-lg"><i class="fas fa-trash-alt"></i></button>
+                    <td class="p-6 text-right align-top">
+                        <button onclick="deleteTask(${t.id})" class="text-gray-800 hover:text-red-500/80 transition-colors pt-1">
+                            <i class="fas fa-trash-alt text-sm"></i>
+                        </button>
                     </td>
                 `;
-                list.appendChild(row);
+                list.appendChild(tr);
             });
 
-            const filterEl = document.getElementById('month-filter');
-            const currentVal = filterEl.value;
+            const filterSelect = document.getElementById('f-month');
+            const savedVal = filterSelect.value;
             const months = [...new Set(tasks.map(t => t.date.substring(0, 7)))].sort().reverse();
-            filterEl.innerHTML = '<option value="all">ALL TIME</option>';
+            filterSelect.innerHTML = '<option value="all">FULL RECAP</option>';
             months.forEach(m => {
-                const parts = m.split('-');
-                const date = new Date(parts[0], parts[1]-1);
-                const label = date.toLocaleString('default', { month: 'short', year: 'numeric' }).toUpperCase();
-                filterEl.innerHTML += `<option value="${m}">${label}</option>`;
+                const [y, mon] = m.split('-');
+                const label = new Date(y, mon-1).toLocaleString('default', { month: 'short', year: 'numeric' }).toUpperCase();
+                filterSelect.innerHTML += `<option value="${m}">${label}</option>`;
             });
-            filterEl.value = currentVal || 'all';
+            filterSelect.value = savedVal || 'all';
         }
     </script>
 </body>
