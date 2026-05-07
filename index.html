@@ -6,27 +6,20 @@
     <title>Budget Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Firebase Imports for Cloud Syncing -->
+    
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, onAuthStateChanged, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, query } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // Configuration provided by environment
         const firebaseConfig = JSON.parse(__firebase_config);
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'freelance-tracker-v1';
 
-        window.trackerApp = {
-            db,
-            auth,
-            appId,
-            user: null
-        };
+        window.trackerApp = { db, auth, appId, user: null };
 
-        // Initialize Authentication (Rule 3)
         const initAuth = async () => {
             try {
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
@@ -36,20 +29,22 @@
                 }
             } catch (error) {
                 console.error("Auth failed:", error);
+                document.getElementById('user-id-display').innerText = "Sync Error: Check Connection";
             }
         };
 
         initAuth();
 
         onAuthStateChanged(auth, (user) => {
-            window.trackerApp.user = user;
             if (user) {
-                document.getElementById('user-id-display').innerText = `Syncing as: ${user.uid}`;
+                window.trackerApp.user = user;
+                const displayId = user.uid.substring(0, 8) + "...";
+                document.getElementById('user-id-display').innerText = `Synced: ${displayId}`;
+                document.getElementById('sync-dot').style.background = "#238636";
                 setupDataListener(user.uid);
             }
         });
 
-        // Listen for cloud data changes
         function setupDataListener(uid) {
             const dataDoc = doc(db, 'artifacts', appId, 'users', uid, 'settings', 'mainData');
             onSnapshot(dataDoc, (snapshot) => {
@@ -61,7 +56,6 @@
             });
         }
 
-        // Global save function
         window.saveToCloud = async (tasks) => {
             if (!window.trackerApp.user) return;
             const uid = window.trackerApp.user.uid;
@@ -69,7 +63,21 @@
             try {
                 await setDoc(dataDoc, { tasks: tasks, lastUpdated: Date.now() });
             } catch (e) {
-                console.error("Failed to save to cloud:", e);
+                console.error("Cloud save failed");
+            }
+        };
+
+        // Helper to copy ID so user can paste it on phone if needed
+        window.copyMyId = () => {
+            if(window.trackerApp.user) {
+                const id = window.trackerApp.user.uid;
+                const el = document.createElement('textarea');
+                el.value = id;
+                document.body.appendChild(el);
+                el.select();
+                document.execCommand('copy');
+                document.body.removeChild(el);
+                alert("Sync ID Copied! You can use this to link devices.");
             }
         };
     </script>
@@ -80,12 +88,7 @@
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             -webkit-tap-highlight-color: transparent;
         }
-
-        .glass-card {
-            background: #161b22;
-            border: 1px solid #30363d;
-        }
-
+        .glass-card { background: #161b22; border: 1px solid #30363d; }
         input, textarea, select {
             background-color: #0d1117 !important;
             border: 1px solid #30363d !important;
@@ -93,86 +96,41 @@
             border-radius: 6px !important;
             outline: none;
         }
-
-        input:focus, textarea:focus, select:focus {
-            border-color: #58a6ff !important;
-        }
-
+        input:focus, textarea:focus, select:focus { border-color: #58a6ff !important; }
         .status-badge {
-            padding: 4px 10px;
-            border-radius: 4px;
-            font-size: 0.7rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            cursor: pointer;
-            display: inline-block;
-            user-select: none;
+            padding: 4px 10px; border-radius: 4px; font-size: 0.7rem; font-weight: 700;
+            text-transform: uppercase; cursor: pointer; display: inline-block; user-select: none;
         }
-
         .status-paid { background: #238636; color: white; }
         .status-pending { background: #9e6a03; color: white; }
         .status-notdone { background: #484f58; color: white; }
-
         .amount-entry-zone {
-            cursor: pointer;
-            padding: 8px;
-            border-radius: 4px;
-            transition: background 0.2s;
-            display: inline-block;
-            min-width: 80px;
-            text-align: right;
+            cursor: pointer; padding: 8px; border-radius: 4px; transition: background 0.2s;
+            display: inline-block; min-width: 80px; text-align: right;
         }
-        
-        .amount-entry-zone:hover {
-            background: rgba(88, 166, 255, 0.1);
-        }
-
-        .inline-edit-input {
-            width: 70px;
-            text-align: right;
-            padding: 2px 4px !important;
-            font-family: monospace;
-            font-weight: bold;
-            font-size: 14px;
-        }
-
-        .client-eyebrow {
-            color: #58a6ff;
-            font-weight: 600;
-            font-size: 0.85rem;
-            margin-bottom: 2px;
-        }
-
+        .amount-entry-zone:hover { background: rgba(88, 166, 255, 0.1); }
+        .inline-edit-input { width: 70px; text-align: right; padding: 2px 4px !important; font-family: monospace; font-weight: bold; font-size: 14px; }
+        .client-eyebrow { color: #58a6ff; font-weight: 600; font-size: 0.85rem; margin-bottom: 2px; }
+        .sync-status { font-size: 10px; color: #8b949e; display: flex; align-items: center; gap: 5px; cursor: pointer; }
+        .dot { height: 6px; width: 6px; border-radius: 50%; background: #f85149; transition: background 0.5s; }
         .table-container { overflow-x: auto; }
-        
-        @media (max-width: 640px) {
-            th, td { padding: 0.75rem 0.5rem !important; }
-        }
-
-        .sync-status {
-            font-size: 10px;
-            color: #8b949e;
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        .dot { height: 6px; width: 6px; border-radius: 50%; background: #238636; }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8">
-
     <div class="max-w-6xl mx-auto">
         <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
             <div>
                 <h1 class="text-2xl font-bold">Earnings Tracker</h1>
-                <div class="sync-status">
-                    <div class="dot"></div>
-                    <span id="user-id-display">Connecting to cloud...</span>
+                <div class="sync-status" onclick="window.copyMyId()">
+                    <div id="sync-dot" class="dot"></div>
+                    <span id="user-id-display">Connecting...</span>
+                    <i class="fas fa-copy ml-1 opacity-50"></i>
                 </div>
                 <p id="current-rate" class="text-xs text-gray-400 mt-1">Loading COP rate...</p>
             </div>
         </header>
 
+        <!-- Totals -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
             <div class="glass-card p-5 rounded-lg text-center">
                 <p class="text-gray-400 text-xs font-bold uppercase">Paid</p>
@@ -189,6 +147,7 @@
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+            <!-- Sidebar -->
             <div class="lg:col-span-4">
                 <div class="glass-card p-6 rounded-lg sticky top-8">
                     <h3 class="text-sm font-bold mb-4 uppercase text-gray-400 tracking-widest">Add New Task</h3>
@@ -217,6 +176,7 @@
                 </div>
             </div>
 
+            <!-- Table -->
             <div class="lg:col-span-8">
                 <div class="glass-card rounded-lg overflow-hidden">
                     <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-gray-800/20">
@@ -225,7 +185,6 @@
                             <option value="all">All Time</option>
                         </select>
                     </div>
-
                     <div class="table-container">
                         <table class="w-full text-left">
                             <thead class="bg-gray-800/50 text-[10px] text-gray-400 uppercase font-bold">
@@ -251,7 +210,6 @@
 
         window.onload = () => {
             fetchRate();
-            // Try local first while cloud loads
             const local = localStorage.getItem('budgetTasks');
             if(local) {
                 tasks = JSON.parse(local);
@@ -260,10 +218,9 @@
             document.getElementById('date').valueAsDate = new Date();
         };
 
-        // This is called automatically when the cloud data changes
         window.syncCloudData = (cloudTasks) => {
             tasks = cloudTasks || [];
-            updateAll(false); // Don't re-save back to cloud in a loop
+            updateAll(false);
         };
 
         async function fetchRate() {
@@ -275,9 +232,7 @@
                     document.getElementById('current-rate').innerText = `Current Rate: 1 USD = ${Math.round(copRate).toLocaleString()} COP`;
                     updateAll(false);
                 }
-            } catch (e) {
-                console.error("Rate fetch failed");
-            }
+            } catch (e) {}
         }
 
         document.getElementById('task-form').addEventListener('submit', (e) => {
@@ -301,10 +256,7 @@
             updateAll(false);
             setTimeout(() => {
                 const input = document.getElementById(`input-${id}`);
-                if(input) {
-                    input.focus();
-                    input.select();
-                }
+                if(input) { input.focus(); input.select(); }
             }, 10);
         }
 
@@ -320,10 +272,7 @@
 
         function handleAmountKey(e, id) {
             if(e.key === 'Enter') e.target.blur();
-            if(e.key === 'Escape') {
-                activeEditId = null;
-                updateAll(false);
-            }
+            if(e.key === 'Escape') { activeEditId = null; updateAll(false); }
         }
 
         function toggleStatus(id) {
@@ -343,12 +292,8 @@
         }
 
         function save() {
-            // Save to local for speed
             localStorage.setItem('budgetTasks', JSON.stringify(tasks));
-            // Save to cloud for syncing between devices
-            if (window.saveToCloud) {
-                window.saveToCloud(tasks);
-            }
+            if (window.saveToCloud) window.saveToCloud(tasks);
             updateAll(false);
         }
 
@@ -371,7 +316,6 @@
                 const isEditing = activeEditId === t.id;
                 const row = document.createElement('tr');
                 row.className = "border-b border-gray-800 text-sm hover:bg-gray-800/10 transition-colors";
-                
                 const amountDisplay = isEditing 
                     ? `<input type="number" step="0.01" id="input-${t.id}" class="inline-edit-input" value="${t.amount}" onblur="handleAmountBlur(${t.id}, this.value)" onkeydown="handleAmountKey(event, ${t.id})">`
                     : `<div class="amount-entry-zone font-bold text-white" onclick="setEditMode(${t.id})">$${t.amount.toFixed(2)}</div>`;
@@ -402,9 +346,7 @@
             const savedVal = filterEl.value;
             const months = [...new Set(tasks.map(t => t.date.substring(0, 7)))].sort().reverse();
             filterEl.innerHTML = '<option value="all">All Time</option>';
-            months.forEach(m => {
-                filterEl.innerHTML += `<option value="${m}">${m}</option>`;
-            });
+            months.forEach(m => { filterEl.innerHTML += `<option value="${m}">${m}</option>`; });
             filterEl.value = savedVal;
         }
     </script>
