@@ -3,88 +3,225 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Budget Tracker</title>
+    <title>Universal Budget Tracker</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = JSON.parse(__firebase_config);
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'universal-tracker-v1';
+
+        let cloudUnsubscribe = null;
+        let isSaving = false;
+
+        // Rule 3: Auth first with reliable fallback
+        async function startAuth() {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (e) {
+                console.error("Auth failed, retrying...", e);
+                setTimeout(startAuth, 2000);
+            }
+        }
+        
+        startAuth();
+
+        onAuthStateChanged(auth, (user) => {
+            if (!user) return;
+
+            // Check URL for shared key (the 'Universal' part)
+            const urlParams = new URLSearchParams(window.location.search);
+            const sharedKey = urlParams.get('sync');
+            if (sharedKey) {
+                localStorage.setItem('universal_sync_key', sharedKey);
+                // Clean URL so it doesn't look messy
+                window.history.replaceState({}, document.title, window.location.pathname);
+            }
+
+            const savedKey = localStorage.getItem('universal_sync_key');
+            if (savedKey) {
+                document.getElementById('sync-key-input').value = savedKey;
+                connectToCloud(savedKey);
+            } else {
+                updateSyncStatus("Enter a key to start", "#8b949e");
+            }
+        });
+
+        window.connectSync = () => {
+            const key = document.getElementById('sync-key-input').value.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (key.length < 3) return alert("Key must be at least 3 letters/numbers.");
+            localStorage.setItem('universal_sync_key', key);
+            connectToCloud(key);
+        };
+
+        window.copySyncLink = () => {
+            const key = localStorage.getItem('universal_sync_key');
+            if (!key) return alert("Connect a key first!");
+            const url = window.location.href.split('?')[0] + '?sync=' + key;
+            
+            // Reliable copy
+            const el = document.createElement('textarea');
+            el.value = url;
+            document.body.appendChild(el);
+            el.select();
+            document.execCommand('copy');
+            document.body.removeChild(el);
+            
+            const btn = document.getElementById('share-btn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check mr-1"></i> Link Copied!';
+            setTimeout(() => { btn.innerHTML = originalText; }, 2000);
+        };
+
+        function updateSyncStatus(text, color) {
+            const dot = document.getElementById('sync-dot');
+            const label = document.getElementById('sync-status-text');
+            if (dot) dot.style.background = color;
+            if (label) label.innerText = text;
+        }
+
+        function connectToCloud(key) {
+            if (cloudUnsubscribe) cloudUnsubscribe();
+            updateSyncStatus("Syncing...", "#e3b341");
+
+            const dataDoc = doc(db, 'artifacts', appId, 'public', 'data', 'sync_' + key);
+
+            cloudUnsubscribe = onSnapshot(dataDoc, (snapshot) => {
+                if (snapshot.exists() && !isSaving) {
+                    const cloudTasks = snapshot.data().tasks;
+                    window.updateLocalData(cloudTasks);
+                    updateSyncStatus("Universal Live: " + key, "#238636");
+                } else if (!snapshot.exists()) {
+                    updateSyncStatus("Connected: " + key, "#58a6ff");
+                }
+                document.getElementById('share-btn').classList.remove('hidden');
+            }, (err) => {
+                console.error(err);
+                updateSyncStatus("Connection Lost", "#f85149");
+                setTimeout(() => connectToCloud(key), 5000); // Auto-retry
+            });
+
+            window.saveGlobal = async (tasks) => {
+                if (!auth.currentUser || isSaving) return;
+                isSaving = true;
+                try {
+                    await setDoc(dataDoc, { 
+                        tasks: tasks, 
+                        lastUpdated: Date.now(),
+                        device: navigator.userAgent
+                    });
+                } catch (e) { 
+                    console.error("Cloud save failed", e); 
+                } finally {
+                    setTimeout(() => { isSaving = false; }, 500); // Prevent loop
+                }
+            };
+        }
+    </script>
+
     <style>
-        body { background-color: #0b0e14; color: #ffffff; font-family: -apple-system, sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background-color: #0b0e14; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; -webkit-tap-highlight-color: transparent; }
         .glass-card { background: #161b22; border: 1px solid #30363d; }
-        input, textarea, select { background-color: #0d1117 !important; border: 1px solid #30363d !important; color: white !important; border-radius: 8px !important; outline: none; }
-        input:focus { border-color: #58a6ff !important; }
-        .status-badge { padding: 6px 12px; border-radius: 6px; font-size: 0.75rem; font-weight: 800; text-transform: uppercase; cursor: pointer; display: inline-block; transition: opacity 0.2s; }
-        .status-paid { background: #238636; color: white; }
-        .status-pending { background: #9e6a03; color: white; }
-        .status-notdone { background: #484f58; color: white; }
-        .amount-display { font-family: 'Courier New', Courier, monospace; font-weight: 900; color: #58a6ff; }
+        input, textarea, select { background-color: #0d1117 !important; border: 1px solid #30363d !important; color: white !important; border-radius: 12px !important; outline: none; }
+        input:focus { border-color: #58a6ff !important; box-shadow: 0 0 0 2px rgba(88, 166, 255, 0.1); }
+        .status-badge { padding: 8px 14px; border-radius: 8px; font-size: 0.75rem; font-weight: 900; text-transform: uppercase; cursor: pointer; display: inline-block; transition: all 0.2s; }
+        .status-paid { background: #238636; box-shadow: 0 4px 12px rgba(35, 134, 54, 0.2); }
+        .status-pending { background: #9e6a03; box-shadow: 0 4px 12px rgba(158, 106, 3, 0.2); }
+        .status-notdone { background: #484f58; }
+        .dot { height: 12px; width: 12px; border-radius: 50%; display: inline-block; }
+        .amount-text { font-family: 'SF Mono', 'Fira Code', monospace; }
+        /* Mobile optimization */
+        @media (max-width: 640px) {
+            .mobile-stack { flex-direction: column; align-items: flex-start; }
+            .mobile-full { width: 100%; }
+        }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-10">
-    <div class="max-w-5xl mx-auto">
-        <header class="mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <div class="max-w-6xl mx-auto">
+        <header class="mb-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
             <div>
-                <h1 class="text-4xl font-black tracking-tight">Earnings Tracker</h1>
-                <p id="current-rate" class="text-sm text-gray-400 mt-2 font-medium">Updating COP exchange rate...</p>
+                <h1 class="text-4xl font-black tracking-tighter">Budget Tracker</h1>
+                <div class="flex flex-wrap items-center gap-4 mt-3">
+                    <div class="flex items-center gap-2 bg-gray-900/50 px-3 py-1.5 rounded-full border border-gray-800">
+                        <div id="sync-dot" class="dot bg-gray-500"></div>
+                        <span id="sync-status-text" class="text-[10px] font-black text-gray-400 uppercase tracking-widest">Checking...</span>
+                    </div>
+                    <button id="share-btn" onclick="copySyncLink()" class="hidden text-[10px] font-black text-blue-400 uppercase border border-blue-400/30 px-3 py-1.5 rounded-full hover:bg-blue-400/10 transition-colors">
+                        <i class="fas fa-share-alt mr-1"></i> Copy Universal Link
+                    </button>
+                </div>
             </div>
-            <div class="bg-blue-600/10 border border-blue-500/30 px-4 py-2 rounded-full">
-                <span class="text-xs font-bold text-blue-400 uppercase tracking-widest">Device-Local Mode</span>
+
+            <div class="glass-card p-4 rounded-2xl flex flex-wrap items-center gap-3 w-full md:w-auto">
+                <input type="text" id="sync-key-input" placeholder="Enter Universal Key" class="text-sm p-3 w-full md:w-48 font-bold">
+                <button onclick="connectSync()" class="bg-blue-600 hover:bg-blue-500 w-full md:w-auto px-6 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all">Link Device</button>
             </div>
         </header>
 
-        <!-- Main Stats -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
-            <div class="glass-card p-6 rounded-2xl shadow-xl">
-                <p class="text-gray-500 text-xs font-black uppercase tracking-widest">Already Paid</p>
-                <h2 id="summary-paid" class="text-3xl font-black mt-2 text-green-500">$0.00</h2>
+            <div class="glass-card p-6 rounded-3xl border-b-4 border-b-green-500 shadow-2xl">
+                <p class="text-gray-500 text-[10px] font-black uppercase tracking-widest">Paid Total</p>
+                <h2 id="summary-paid" class="text-4xl font-black mt-1 text-green-400 amount-text">$0.00</h2>
             </div>
-            <div class="glass-card p-6 rounded-2xl shadow-xl">
-                <p class="text-gray-500 text-xs font-black uppercase tracking-widest">Pending Payment</p>
-                <h2 id="summary-pending" class="text-3xl font-black mt-2 text-orange-500">$0.00</h2>
+            <div class="glass-card p-6 rounded-3xl border-b-4 border-b-orange-500 shadow-2xl">
+                <p class="text-gray-500 text-[10px] font-black uppercase tracking-widest">Pending</p>
+                <h2 id="summary-pending" class="text-4xl font-black mt-1 text-orange-400 amount-text">$0.00</h2>
             </div>
-            <div class="glass-card p-6 rounded-2xl shadow-xl">
-                <p class="text-gray-500 text-xs font-black uppercase tracking-widest">Total Projected</p>
-                <h2 id="summary-total" class="text-3xl font-black mt-2 text-blue-400">$0.00</h2>
+            <div class="glass-card p-6 rounded-3xl border-b-4 border-b-blue-500 shadow-2xl">
+                <p class="text-gray-500 text-[10px] font-black uppercase tracking-widest">Combined</p>
+                <h2 id="summary-total" class="text-4xl font-black mt-1 text-blue-400 amount-text">$0.00</h2>
             </div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
-            <!-- Sidebar: Add Entry -->
             <div class="lg:col-span-4">
                 <div class="glass-card p-8 rounded-3xl sticky top-8 shadow-2xl">
-                    <h3 class="text-sm font-black mb-6 text-gray-400 uppercase tracking-[0.2em]">Add New Work</h3>
+                    <h3 class="text-xs font-black mb-6 text-gray-500 uppercase tracking-widest">Add Work</h3>
                     <form id="task-form" class="space-y-6">
                         <div>
-                            <label class="block text-[11px] font-black text-gray-500 mb-2 uppercase">Date of Work</label>
-                            <input type="date" id="date" required class="w-full p-3 text-sm font-bold">
+                            <label class="block text-[10px] font-black text-gray-500 mb-2 uppercase">Date</label>
+                            <input type="date" id="date" required class="w-full p-3 font-bold">
                         </div>
                         <div>
-                            <label class="block text-[11px] font-black text-gray-500 mb-2 uppercase">Who is it for?</label>
-                            <select id="client" required class="w-full p-3 text-sm font-bold">
+                            <label class="block text-[10px] font-black text-gray-500 mb-2 uppercase">Client</label>
+                            <select id="client" required class="w-full p-3 font-bold">
                                 <option value="Dad">Dad</option>
                                 <option value="MyStrengthBook">MyStrengthBook</option>
                                 <option value="3rd Party">3rd Party</option>
                             </select>
                         </div>
                         <div>
-                            <label class="block text-[11px] font-black text-gray-500 mb-2 uppercase">What did you do?</label>
-                            <textarea id="description" rows="3" placeholder="Explain the task..." required class="w-full p-3 text-sm font-medium"></textarea>
+                            <label class="block text-[10px] font-black text-gray-500 mb-2 uppercase">Task</label>
+                            <textarea id="description" rows="3" placeholder="What did you do?" required class="w-full p-3 font-medium"></textarea>
                         </div>
-                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-black text-sm transition-all uppercase tracking-widest shadow-lg shadow-blue-900/20">
-                            Add to Log
+                        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg shadow-blue-900/40 transition-transform active:scale-95">
+                            Submit Log
                         </button>
                     </form>
                 </div>
             </div>
 
-            <!-- Main Content: Task List -->
             <div class="lg:col-span-8">
                 <div class="glass-card rounded-3xl overflow-hidden shadow-2xl">
                     <div class="p-6 border-b border-gray-800 flex justify-between items-center bg-white/5">
-                        <span class="text-xs font-black text-gray-400 uppercase tracking-widest">Activity History</span>
-                        <select id="month-filter" class="text-xs bg-transparent border-none p-2 font-black text-blue-400 cursor-pointer"></select>
+                        <span class="text-xs font-black text-gray-400 uppercase tracking-widest">Recent Activity</span>
+                        <select id="month-filter" class="text-xs bg-transparent border-none p-1 font-black text-blue-400 cursor-pointer"></select>
                     </div>
                     <div class="overflow-x-auto">
-                        <table class="w-full text-left border-collapse">
-                            <thead class="text-[11px] text-gray-500 uppercase font-black border-b border-gray-800 bg-gray-900/50">
+                        <table class="w-full text-left">
+                            <thead class="text-[10px] text-gray-500 uppercase font-black border-b border-gray-800 bg-gray-900/50">
                                 <tr>
                                     <th class="p-6">Job Details</th>
                                     <th class="p-6 text-right">USD Amount</th>
@@ -95,20 +232,9 @@
                             <tbody id="task-list"></tbody>
                         </table>
                     </div>
-                    <div id="empty-state" class="p-20 text-center hidden">
-                        <i class="fas fa-folder-open text-4xl text-gray-700 mb-4"></i>
-                        <p class="text-gray-500 font-bold uppercase text-xs tracking-widest">No entries found for this month</p>
+                    <div id="empty-hint" class="p-20 text-center hidden">
+                        <p class="text-gray-600 font-bold uppercase text-[10px] tracking-[0.3em]">No entries for this month</p>
                     </div>
-                </div>
-
-                <!-- Backup/Universal Transfer Section -->
-                <div class="mt-10 glass-card p-6 rounded-2xl border-dashed border-gray-700">
-                    <h4 class="text-xs font-black text-gray-500 uppercase mb-4 tracking-widest">Transfer to Phone / Backup</h4>
-                    <div class="flex gap-4">
-                        <button onclick="exportData()" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-tighter">Copy Backup Text</button>
-                        <button onclick="importData()" class="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-xs font-bold uppercase tracking-tighter">Import from Backup</button>
-                    </div>
-                    <p class="text-[10px] text-gray-600 mt-3 font-medium italic">Copy the backup text from your computer and paste it into the "Import" box on your phone to move your data.</p>
                 </div>
             </div>
         </div>
@@ -116,32 +242,23 @@
 
     <script>
         let tasks = [];
-        let copRate = 3950;
         let activeEditId = null;
 
         window.onload = () => {
-            fetchRate();
-            const savedData = localStorage.getItem('budgetTasks_v2');
-            if(savedData) {
-                tasks = JSON.parse(savedData);
+            const local = localStorage.getItem('budgetTasks_v3');
+            if(local) {
+                tasks = JSON.parse(local);
                 render();
             }
             document.getElementById('date').valueAsDate = new Date();
         };
 
-        async function fetchRate() {
-            try {
-                const res = await fetch('https://open.er-api.com/v6/latest/USD');
-                const data = await res.json();
-                if(data?.rates?.COP) {
-                    copRate = data.rates.COP;
-                    document.getElementById('current-rate').innerText = `Live Market: 1 USD = ${Math.round(copRate).toLocaleString()} COP`;
-                    render();
-                }
-            } catch (e) {
-                document.getElementById('current-rate').innerText = "Exchange Rate Unavailable";
-            }
-        }
+        window.updateLocalData = (cloudTasks) => {
+            if (!cloudTasks) return;
+            tasks = cloudTasks;
+            localStorage.setItem('budgetTasks_v3', JSON.stringify(tasks));
+            render();
+        };
 
         document.getElementById('task-form').addEventListener('submit', (e) => {
             e.preventDefault();
@@ -177,36 +294,9 @@
         }
 
         function save() {
-            localStorage.setItem('budgetTasks_v2', JSON.stringify(tasks));
+            localStorage.setItem('budgetTasks_v3', JSON.stringify(tasks));
+            if (window.saveGlobal) window.saveGlobal(tasks);
             render();
-        }
-
-        function exportData() {
-            const dataStr = JSON.stringify(tasks);
-            const el = document.createElement('textarea');
-            el.value = btoa(dataStr); // Base64 for cleaner copying
-            document.body.appendChild(el);
-            el.select();
-            document.execCommand('copy');
-            document.body.removeChild(el);
-            alert("Backup code copied! Paste this into the Import box on your phone.");
-        }
-
-        function importData() {
-            const code = prompt("Paste your backup code here:");
-            if (code) {
-                try {
-                    const decoded = atob(code);
-                    const parsed = JSON.parse(decoded);
-                    if (Array.isArray(parsed)) {
-                        tasks = parsed;
-                        save();
-                        alert("Data imported successfully!");
-                    }
-                } catch (e) {
-                    alert("Error: Invalid backup code.");
-                }
-            }
         }
 
         function render() {
@@ -217,19 +307,16 @@
             const pending = filtered.filter(t => t.status === 'pending').reduce((s, t) => s + t.amount, 0);
             const total = filtered.reduce((s, t) => s + t.amount, 0);
 
-            document.getElementById('summary-paid').innerText = `$${paid.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-            document.getElementById('summary-pending').innerText = `$${pending.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
-            document.getElementById('summary-total').innerText = `$${total.toLocaleString(undefined, {minimumFractionDigits: 2})}`;
+            document.getElementById('summary-paid').innerText = `$${paid.toFixed(2)}`;
+            document.getElementById('summary-pending').innerText = `$${pending.toFixed(2)}`;
+            document.getElementById('summary-total').innerText = `$${total.toFixed(2)}`;
 
             const list = document.getElementById('task-list');
-            const emptyState = document.getElementById('empty-state');
+            const hint = document.getElementById('empty-hint');
             list.innerHTML = '';
             
-            if (filtered.length === 0) {
-                emptyState.classList.remove('hidden');
-            } else {
-                emptyState.classList.add('hidden');
-            }
+            if (filtered.length === 0) hint.classList.remove('hidden');
+            else hint.classList.add('hidden');
 
             filtered.forEach(t => {
                 const isEditing = activeEditId === t.id;
@@ -238,39 +325,36 @@
                 
                 const amountInput = isEditing 
                     ? `<input type="number" step="0.01" class="w-32 text-right p-2 text-white bg-blue-900 border-blue-400 border-2 rounded-xl text-xl font-bold" value="${t.amount}" onblur="handleAmountBlur(${t.id}, this.value)" onkeydown="if(event.key==='Enter')this.blur()" autofocus>`
-                    : `<div class="cursor-pointer text-2xl font-black amount-display" onclick="activeEditId=${t.id};render()">$${t.amount.toFixed(2)}</div>`;
+                    : `<div class="cursor-pointer font-black text-2xl text-white amount-text" onclick="activeEditId=${t.id};render()">$${t.amount.toFixed(2)}</div>`;
 
                 row.innerHTML = `
                     <td class="p-6">
                         <div class="text-[10px] font-black text-blue-400 uppercase mb-1 tracking-widest">${t.client}</div>
                         <div class="text-sm font-bold text-gray-200 mb-1 leading-tight">${t.description}</div>
-                        <div class="text-[10px] text-gray-500 font-bold">${t.date}</div>
+                        <div class="text-[10px] text-gray-600 font-mono font-bold">${t.date}</div>
                     </td>
-                    <td class="p-6 text-right">
-                        ${amountInput}
-                        <div class="text-[10px] text-gray-500 mt-2 font-bold uppercase tracking-tighter">≈ ${(t.amount * copRate).toLocaleString(undefined, {maximumFractionDigits:0})} COP</div>
-                    </td>
+                    <td class="p-6 text-right">${amountInput}</td>
                     <td class="p-6 text-center">
                         <span onclick="toggleStatus(${t.id})" class="status-badge status-${t.status}">
-                            ${t.status === 'notdone' ? 'To-Do' : t.status}
+                            ${t.status === 'notdone' ? 'To Do' : t.status}
                         </span>
                     </td>
                     <td class="p-6 text-right">
-                        <button onclick="if(confirm('Delete this entry?')){tasks=tasks.filter(x=>x.id!==${t.id});save()}" class="text-gray-700 hover:text-red-500 p-2 text-lg transition-colors"><i class="fas fa-trash"></i></button>
+                        <button onclick="if(confirm('Delete?')){tasks=tasks.filter(x=>x.id!==${t.id});save()}" class="text-gray-700 hover:text-red-500 p-2 text-lg"><i class="fas fa-trash-alt"></i></button>
                     </td>
                 `;
                 list.appendChild(row);
             });
 
-            // Month Filter Logic
             const filterEl = document.getElementById('month-filter');
             const currentVal = filterEl.value;
             const months = [...new Set(tasks.map(t => t.date.substring(0, 7)))].sort().reverse();
-            filterEl.innerHTML = '<option value="all">VIEW ALL TIME</option>';
+            filterEl.innerHTML = '<option value="all">ALL TIME</option>';
             months.forEach(m => {
-                const [y, mm] = m.split('-');
-                const name = new Date(y, mm - 1).toLocaleString('default', { month: 'short' });
-                filterEl.innerHTML += `<option value="${m}">${name.toUpperCase()} ${y}</option>`;
+                const parts = m.split('-');
+                const date = new Date(parts[0], parts[1]-1);
+                const label = date.toLocaleString('default', { month: 'short', year: 'numeric' }).toUpperCase();
+                filterEl.innerHTML += `<option value="${m}">${label}</option>`;
             });
             filterEl.value = currentVal || 'all';
         }
