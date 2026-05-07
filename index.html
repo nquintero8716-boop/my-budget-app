@@ -3,10 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Budget Tracker</title>
+    <title>Work Log</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700;900&family=JetBrains+Mono:wght@500;800&display=swap');
+
         :root {
             --neon-blue: #00d2ff;
             --neon-green: #39ff14;
@@ -18,40 +20,40 @@
         body { 
             background-color: var(--bg-dark); 
             color: #e2e8f0; 
-            font-family: 'Inter', -apple-system, sans-serif; 
+            font-family: 'Inter', sans-serif; 
             -webkit-tap-highlight-color: transparent;
-            line-height: 1.5;
         }
 
         .glass { 
             background: var(--card-bg); 
             border: 1px solid #1e293b; 
-            border-radius: 20px;
-            box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
+            border-radius: 24px;
         }
 
+        /* Large, Clear Inputs */
         input, select, textarea { 
             background: #07090d !important; 
-            border: 1px solid #1e293b !important; 
+            border: 2px solid #1e293b !important; 
             color: white !important; 
-            border-radius: 12px !important; 
+            border-radius: 16px !important; 
             outline: none !important;
             transition: all 0.2s ease;
+            font-size: 16px !important; 
         }
+        input:focus { border-color: var(--neon-blue) !important; box-shadow: 0 0 15px rgba(0, 210, 255, 0.3); }
 
-        input:focus { border-color: var(--neon-blue) !important; box-shadow: 0 0 10px rgba(0, 210, 255, 0.2); }
-
-        /* Neon Glow Status Buttons */
+        /* Neon Buttons */
         .status-btn { 
-            padding: 8px 14px; 
-            border-radius: 10px; 
-            font-size: 10px; 
-            font-weight: 800; 
+            padding: 10px 16px; 
+            border-radius: 12px; 
+            font-size: 11px; 
+            font-weight: 900; 
             text-transform: uppercase; 
             cursor: pointer; 
             transition: all 0.3s ease;
             border: 1px solid transparent;
-            letter-spacing: 0.05em;
+            letter-spacing: 0.1em;
+            display: inline-block;
         }
 
         .status-paid { 
@@ -59,149 +61,127 @@
             color: var(--neon-green);
             border-color: rgba(57, 255, 20, 0.3);
             text-shadow: 0 0 8px rgba(57, 255, 20, 0.5);
-            box-shadow: 0 0 15px rgba(57, 255, 20, 0.1);
         }
-        .status-paid:hover { background: rgba(57, 255, 20, 0.2); box-shadow: 0 0 20px rgba(57, 255, 20, 0.3); }
 
         .status-pending { 
             background: rgba(255, 204, 0, 0.1); 
             color: var(--neon-gold);
             border-color: rgba(255, 204, 0, 0.3);
             text-shadow: 0 0 8px rgba(255, 204, 0, 0.5);
-            box-shadow: 0 0 15px rgba(255, 204, 0, 0.1);
-        }
-        .status-pending:hover { background: rgba(255, 204, 0, 0.2); box-shadow: 0 0 20px rgba(255, 204, 0, 0.3); }
-
-        .status-notdone { 
-            background: rgba(148, 163, 184, 0.1); 
-            color: #94a3b8;
-            border-color: rgba(148, 163, 184, 0.2);
         }
 
-        /* Neon Glow Primary Button */
+        .status-notdone { background: rgba(148, 163, 184, 0.1); color: #94a3b8; border-color: rgba(148, 163, 184, 0.2); }
+
         .btn-primary {
             background: linear-gradient(135deg, #00d2ff 0%, #3a7bd5 100%);
             color: white;
-            box-shadow: 0 4px 15px rgba(0, 210, 255, 0.3);
+            box-shadow: 0 8px 20px rgba(0, 210, 255, 0.2);
             transition: all 0.2s;
         }
-        .btn-primary:hover {
-            box-shadow: 0 0 20px rgba(0, 210, 255, 0.5);
-            transform: translateY(-1px);
+
+        .money { font-family: 'JetBrains Mono', monospace; font-weight: 800; }
+        .cop-text { font-size: 12px; color: #64748b; font-family: 'JetBrains Mono', monospace; font-weight: 600; }
+
+        .amount-input {
+            width: 140px;
+            background: transparent !important;
+            border: none !important;
+            text-align: right;
+            font-size: 24px !important;
+            font-weight: 900;
+            color: white !important;
+            padding: 0 !important;
         }
 
-        .money { font-family: 'JetBrains Mono', monospace; font-weight: 800; letter-spacing: -0.05em; }
-        
         .transfer-btn { 
-            font-size: 10px; 
-            font-weight: 700; 
-            text-transform: uppercase; 
-            padding: 8px 12px; 
-            border-radius: 10px; 
-            border: 1px solid #1e293b;
-            color: #94a3b8;
-            transition: all 0.2s;
+            font-size: 10px; font-weight: 800; text-transform: uppercase; 
+            padding: 10px 14px; border-radius: 12px; border: 1px solid #1e293b;
+            color: #94a3b8; transition: all 0.2s;
         }
-        .transfer-btn:hover { border-color: var(--neon-blue); color: var(--neon-blue); }
-
-        /* Custom Scrollbar */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: var(--bg-dark); }
-        ::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
     </style>
 </head>
-<body class="p-4 md:p-8 lg:p-12">
+<body class="p-4 md:p-10">
     <div class="max-w-6xl mx-auto">
-        <header class="flex flex-col md:flex-row justify-between items-start md:items-end gap-6 mb-12">
+        <!-- Simplified Header -->
+        <header class="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-12">
             <div>
-                <h1 class="text-5xl font-black tracking-tight mb-2 italic">DASH<span class="text-blue-500">BOARD</span></h1>
+                <h1 class="text-4xl font-black tracking-tight mb-2 uppercase">Work <span class="text-blue-500">Log</span></h1>
                 <div class="flex items-center gap-3">
                     <div class="flex items-center gap-2 px-3 py-1 bg-blue-500/10 rounded-full border border-blue-500/20">
                         <div class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></div>
-                        <span class="text-[9px] font-black text-blue-400 uppercase tracking-widest">Local Node Active</span>
+                        <span id="rate-display" class="text-[9px] font-black text-blue-400 uppercase tracking-widest">Updating COP Rate...</span>
                     </div>
                 </div>
             </div>
-            
             <div class="flex gap-3 w-full md:w-auto">
-                <button onclick="exportData()" class="transfer-btn flex-1 md:flex-none flex items-center justify-center gap-2">
-                    <i class="fas fa-file-export"></i> Export
-                </button>
-                <label class="transfer-btn flex-1 md:flex-none flex items-center justify-center gap-2 cursor-pointer">
-                    <i class="fas fa-file-import"></i> Import
-                    <input type="file" id="import-file" class="hidden" accept=".json" onchange="importData(event)">
+                <button onclick="exportData()" class="transfer-btn flex-1 md:flex-none"><i class="fas fa-download mr-2"></i>Backup</button>
+                <label class="transfer-btn flex-1 md:flex-none text-center cursor-pointer">
+                    <i class="fas fa-upload mr-2"></i>Restore
+                    <input type="file" class="hidden" accept=".json" onchange="importData(event)">
                 </label>
             </div>
         </header>
 
         <!-- Stats Grid -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-            <div class="glass p-8 relative overflow-hidden group">
-                <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <i class="fas fa-check-circle text-4xl text-green-400"></i>
-                </div>
-                <span class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Received</span>
-                <div id="val-paid" class="text-4xl font-black text-green-400 money mt-3 tracking-tighter">$0.00</div>
+            <div class="glass p-8 group border-l-4 border-green-500/30">
+                <span class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Paid (USD)</span>
+                <div id="val-paid" class="text-4xl font-black text-green-400 money mt-2">$0</div>
+                <div id="val-paid-cop" class="cop-text mt-1">~ $0 COP</div>
             </div>
-            <div class="glass p-8 relative overflow-hidden group">
-                <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
-                    <i class="fas fa-clock text-4xl text-orange-400"></i>
-                </div>
-                <span class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">In Transit</span>
-                <div id="val-pending" class="text-4xl font-black text-orange-400 money mt-3 tracking-tighter">$0.00</div>
+            <div class="glass p-8 group border-l-4 border-orange-500/30">
+                <span class="text-[10px] font-black text-gray-500 uppercase tracking-[0.2em]">Pending (USD)</span>
+                <div id="val-pending" class="text-4xl font-black text-orange-400 money mt-2">$0</div>
+                <div id="val-pending-cop" class="cop-text mt-1">~ $0 COP</div>
             </div>
-            <div class="glass p-8 border-t-2 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.1)]">
-                <span class="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em]">Total Lifetime</span>
-                <div id="val-total" class="text-4xl font-black text-white money mt-3 tracking-tighter">$0.00</div>
+            <div class="glass p-8 border-t-4 border-blue-500">
+                <span class="text-[10px] font-black text-blue-500 uppercase tracking-[0.2em]">Lifetime Revenue</span>
+                <div id="val-total" class="text-4xl font-black text-white money mt-2">$0</div>
+                <div id="val-total-cop" class="cop-text mt-1 text-blue-400/60">~ $0 COP</div>
             </div>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-12 gap-10">
-            <!-- Sidebar: Add Form -->
+            <!-- Form -->
             <div class="lg:col-span-4">
                 <div class="glass p-8 sticky top-8">
-                    <h2 class="text-xs font-black text-gray-400 uppercase tracking-widest mb-8 flex items-center gap-2">
-                        <i class="fas fa-plus-circle text-blue-500"></i> Create Entry
-                    </h2>
+                    <h3 class="text-xs font-black text-gray-500 uppercase tracking-widest mb-6">New Record</h3>
                     <form id="entry-form" class="space-y-6">
-                        <div class="space-y-2">
-                            <label class="text-[9px] font-bold text-gray-500 uppercase ml-1">Timeline</label>
-                            <input type="date" id="f-date" required class="w-full p-4 font-bold text-sm">
-                        </div>
-                        <div class="space-y-2">
-                            <label class="text-[9px] font-bold text-gray-500 uppercase ml-1">Entity</label>
-                            <select id="f-client" required class="w-full p-4 font-bold text-sm appearance-none">
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-black text-gray-500 uppercase ml-1">Client</label>
+                            <select id="f-client" required class="w-full p-4 font-bold">
                                 <option value="Dad">Dad</option>
                                 <option value="MyStrengthBook">MyStrengthBook</option>
                                 <option value="3rd Party">3rd Party</option>
                             </select>
                         </div>
-                        <div class="space-y-2">
-                            <label class="text-[9px] font-bold text-gray-500 uppercase ml-1">Brief</label>
-                            <textarea id="f-desc" placeholder="Describe the task..." required class="w-full p-4 text-sm font-medium h-28 resize-none"></textarea>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-black text-gray-500 uppercase ml-1">Task Info</label>
+                            <textarea id="f-desc" placeholder="What did you do?" required class="w-full p-4 font-medium h-24 resize-none"></textarea>
                         </div>
-                        <button type="submit" class="w-full btn-primary py-4 rounded-xl font-black text-[10px] uppercase tracking-[0.2em] active:scale-95">Add to Ledger</button>
+                        <div class="space-y-1">
+                            <label class="text-[10px] font-black text-gray-500 uppercase ml-1">Date</label>
+                            <input type="date" id="f-date" required class="w-full p-4 font-bold">
+                        </div>
+                        <button type="submit" class="w-full btn-primary py-5 rounded-2xl font-black text-[12px] uppercase tracking-[0.2em]">Create Entry</button>
                     </form>
                 </div>
             </div>
 
-            <!-- Main Content: History -->
+            <!-- List -->
             <div class="lg:col-span-8">
-                <div class="glass overflow-hidden min-h-[500px]">
+                <div class="glass min-h-[500px]">
                     <div class="p-6 border-b border-white/5 bg-white/[0.02] flex justify-between items-center">
-                        <span class="text-xs font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
-                            <i class="fas fa-list-ul text-blue-500"></i> Records
-                        </span>
-                        <select id="f-month" onchange="renderApp()" class="bg-transparent! border-none! text-xs font-black text-blue-400 cursor-pointer focus:ring-0"></select>
+                        <span class="text-xs font-black text-gray-400 uppercase tracking-widest italic">Ledger Log</span>
+                        <select id="f-month" onchange="renderApp()" class="bg-transparent! border-none! text-xs font-black text-blue-400 cursor-pointer"></select>
                     </div>
                     <div class="overflow-x-auto">
-                        <table class="w-full text-left">
+                        <table class="w-full">
                             <tbody id="list"></tbody>
                         </table>
                     </div>
-                    <div id="empty" class="p-32 text-center hidden">
-                        <i class="fas fa-folder-open text-gray-800 text-5xl mb-4"></i>
-                        <p class="text-gray-600 font-bold uppercase text-[10px] tracking-[0.4em]">Vault Empty</p>
+                    <div id="empty" class="p-20 text-center hidden">
+                        <p class="text-gray-700 font-black uppercase text-[10px] tracking-[0.5em]">No Data Found</p>
                     </div>
                 </div>
             </div>
@@ -210,43 +190,43 @@
 
     <script>
         let tasks = [];
+        let usdToCop = 3900; 
+
+        async function fetchRate() {
+            try {
+                const res = await fetch('https://open.er-api.com/v6/latest/USD');
+                const data = await res.json();
+                usdToCop = data.rates.COP;
+                document.getElementById('rate-display').innerText = `LIVE: $1 USD = ${Math.round(usdToCop).toLocaleString()} COP`;
+                renderApp();
+            } catch (e) {
+                document.getElementById('rate-display').innerText = `Rate: ~3,900 COP (Manual Mode)`;
+            }
+        }
 
         window.onload = () => {
-            const saved = localStorage.getItem('my_budget_data');
+            const saved = localStorage.getItem('budget_tracker_neon_v2');
             if (saved) tasks = JSON.parse(saved);
             document.getElementById('f-date').valueAsDate = new Date();
+            fetchRate();
             renderApp();
         };
 
         function saveData() {
-            localStorage.setItem('my_budget_data', JSON.stringify(tasks));
+            localStorage.setItem('budget_tracker_neon_v2', JSON.stringify(tasks));
             renderApp();
         }
 
-        window.exportData = () => {
-            const dataStr = JSON.stringify(tasks, null, 2);
-            const blob = new Blob([dataStr], { type: "application/json" });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `budget_ledger_${new Date().toISOString().split('T')[0]}.json`;
-            link.click();
+        const formatCOP = (usd) => {
+            const total = Math.round(usd * usdToCop);
+            return '$' + total.toLocaleString('en-US'); 
         };
 
-        window.importData = (event) => {
-            const file = event.target.files[0];
-            if (!file) return;
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                try {
-                    const imported = JSON.parse(e.target.result);
-                    if (Array.isArray(imported)) {
-                        tasks = imported;
-                        saveData();
-                    }
-                } catch (err) { alert('Invalid file format.'); }
-            };
-            reader.readAsText(file);
+        const formatUSD = (val) => {
+            return '$' + val.toLocaleString('en-US', { 
+                minimumFractionDigits: val % 1 === 0 ? 0 : 2,
+                maximumFractionDigits: 2 
+            });
         };
 
         document.getElementById('entry-form').onsubmit = (e) => {
@@ -282,55 +262,61 @@
         };
 
         window.deleteTask = (id) => {
-            tasks = tasks.filter(t => t.id !== id);
-            saveData();
+            if (confirm("Permanently delete this entry?")) {
+                tasks = tasks.filter(t => t.id !== id);
+                saveData();
+            }
         };
 
         function renderApp() {
             const filter = document.getElementById('f-month').value || 'all';
             const filtered = filter === 'all' ? tasks : tasks.filter(t => t.date.startsWith(filter));
 
-            const paid = filtered.filter(t => t.status === 'paid').reduce((a, b) => a + b.amount, 0);
-            const pending = filtered.filter(t => t.status === 'pending').reduce((a, b) => a + b.amount, 0);
-            const total = filtered.reduce((a, b) => a + b.amount, 0);
+            const paidUSD = filtered.filter(t => t.status === 'paid').reduce((a, b) => a + b.amount, 0);
+            const pendingUSD = filtered.filter(t => t.status === 'pending').reduce((a, b) => a + b.amount, 0);
+            const totalUSD = filtered.reduce((a, b) => a + b.amount, 0);
 
-            document.getElementById('val-paid').innerText = `$${paid.toLocaleString(undefined, {minimumFractionDigits:2})}`;
-            document.getElementById('val-pending').innerText = `$${pending.toLocaleString(undefined, {minimumFractionDigits:2})}`;
-            document.getElementById('val-total').innerText = `$${total.toLocaleString(undefined, {minimumFractionDigits:2})}`;
+            document.getElementById('val-paid').innerText = formatUSD(paidUSD);
+            document.getElementById('val-paid-cop').innerText = `~ ${formatCOP(paidUSD)} COP`;
+            document.getElementById('val-pending').innerText = formatUSD(pendingUSD);
+            document.getElementById('val-pending-cop').innerText = `~ ${formatCOP(pendingUSD)} COP`;
+            document.getElementById('val-total').innerText = formatUSD(totalUSD);
+            document.getElementById('val-total-cop').innerText = `~ ${formatCOP(totalUSD)} COP`;
 
             const list = document.getElementById('list');
-            const empty = document.getElementById('empty');
             list.innerHTML = '';
             
-            if (filtered.length === 0) empty.classList.remove('hidden');
-            else empty.classList.add('hidden');
+            if (filtered.length === 0) document.getElementById('empty').classList.remove('hidden');
+            else document.getElementById('empty').classList.add('hidden');
 
             filtered.forEach(t => {
                 const tr = document.createElement('tr');
-                tr.className = "border-b border-white/[0.03] hover:bg-white/[0.02] transition-colors group";
+                tr.className = "border-b border-white/[0.03] hover:bg-white/[0.01]";
                 tr.innerHTML = `
                     <td class="p-6 align-top">
-                        <div class="text-[9px] font-black text-blue-400 uppercase tracking-widest mb-1 opacity-80">${t.client}</div>
-                        <div class="text-[13px] font-bold text-gray-100 mb-1">${t.desc}</div>
-                        <div class="text-[9px] text-gray-600 font-mono font-bold">${t.date}</div>
+                        <div class="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">${t.client}</div>
+                        <div class="text-sm font-bold text-gray-100 mb-1 leading-tight">${t.desc}</div>
+                        <div class="text-[10px] text-gray-600 font-mono font-bold">${t.date}</div>
                     </td>
                     <td class="p-6 text-right align-top">
-                        <div class="flex flex-col items-end gap-2">
-                            <div class="relative group/input">
-                                <span class="absolute left-[-15px] top-[4px] text-xs font-black text-gray-700">$</span>
-                                <input type="number" step="0.01" 
-                                    class="w-28 bg-transparent! border-none! text-right font-black money text-2xl text-white focus:text-blue-400" 
-                                    value="${t.amount}" 
+                        <div class="flex flex-col items-end">
+                            <div class="flex items-baseline justify-end gap-1 mb-1">
+                                <span class="text-xs font-black text-gray-600">$</span>
+                                <input type="number" 
+                                    class="amount-input" 
+                                    placeholder="0"
+                                    value="${t.amount || ''}" 
                                     onblur="updateAmount(${t.id}, this.value)">
                             </div>
+                            <div class="text-[11px] font-mono font-bold text-gray-600 mb-4">${formatCOP(t.amount)}</div>
                             <span onclick="toggleStatus(${t.id})" class="status-btn status-${t.status}">
-                                ${t.status === 'notdone' ? 'Pending Action' : t.status}
+                                ${t.status === 'notdone' ? 'To Do' : t.status}
                             </span>
                         </div>
                     </td>
-                    <td class="p-6 text-right align-top">
-                        <button onclick="deleteTask(${t.id})" class="text-gray-800 hover:text-red-500/80 transition-colors pt-1">
-                            <i class="fas fa-trash-alt text-sm"></i>
+                    <td class="p-4 text-right align-top">
+                        <button onclick="deleteTask(${t.id})" class="text-gray-800 hover:text-red-500 transition-colors p-2">
+                            <i class="fas fa-trash-alt text-xs"></i>
                         </button>
                     </td>
                 `;
@@ -338,16 +324,36 @@
             });
 
             const filterSelect = document.getElementById('f-month');
-            const savedVal = filterSelect.value;
+            const currentVal = filterSelect.value;
             const months = [...new Set(tasks.map(t => t.date.substring(0, 7)))].sort().reverse();
-            filterSelect.innerHTML = '<option value="all">FULL RECAP</option>';
+            filterSelect.innerHTML = '<option value="all">VIEW ALL</option>';
             months.forEach(m => {
-                const [y, mon] = m.split('-');
-                const label = new Date(y, mon-1).toLocaleString('default', { month: 'short', year: 'numeric' }).toUpperCase();
+                const d = new Date(m + '-02');
+                const label = d.toLocaleString('default', { month: 'short', year: 'numeric' }).toUpperCase();
                 filterSelect.innerHTML += `<option value="${m}">${label}</option>`;
             });
-            filterSelect.value = savedVal || 'all';
+            filterSelect.value = currentVal || 'all';
         }
+
+        window.exportData = () => {
+            const blob = new Blob([JSON.stringify(tasks, null, 2)], { type: "application/json" });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'work_ledger.json';
+            a.click();
+        };
+
+        window.importData = (e) => {
+            const reader = new FileReader();
+            reader.onload = (event) => { 
+                try {
+                    tasks = JSON.parse(event.target.result); 
+                    saveData(); 
+                } catch(err) { alert("Invalid File"); }
+            };
+            reader.readAsText(e.target.files[0]);
+        };
     </script>
 </body>
 </html>
